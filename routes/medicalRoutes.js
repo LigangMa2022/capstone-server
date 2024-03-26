@@ -8,11 +8,11 @@ router.route("/issues").get(medicalControllers.getIssues);
 // get all symptoms
 router.route("/symptoms").get(medicalControllers.getSymptoms);
 
-router.route("/diagnosis").get(medicalControllers.getDiagnosis);
+// get diagnosis by symptom id, gender and age
+router.route("/diagnosis/symptoms/:symptomID/genders/:gender/ages/:age")
+    .get(medicalControllers.getDiagnosisByIdAgeGender);
 
-// router.get("/diagnosis",async (req,res)=>{
-//     const diagnosisData = await knex("diagnosis");
-//     res.json(diagnosisData);
-// })
+router.route("/diagnosis/:symptomName/genders/:gender/ages/:age")
+    .get(medicalControllers.getDiagnosisBySymptomAgeGender);
 
 module.exports = router;
