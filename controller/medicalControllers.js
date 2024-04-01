@@ -22,23 +22,6 @@ const getSymptoms = async (req, res) => {
     }
   };
 
-const getDiagnosisByIdAgeGender = async (req,res) => {
-    try {
-        const data1 = await knex("diagnosis").update({ 'Gender': req.params.gender })
-                                             .update({ 'Age': req.params.age })
-                                             .where({ 'SymptomID': req.params.symptomID });
-        
-        const data2 = await knex("diagnosis").where({ 'SymptomID': req.params.symptomID })
-                                             .where({ 'Age': req.params.age })
-                                             .andWhere({ 'Gender': req.params.gender });
-        res.status(200).json(data2);
-    } catch (err) {
-        res.status(400).json({
-            message: `Error retrieving diagnosis result : ${err}`
-        })
-    }
-}
-
 const getDiagnosisBySymptomAgeGender = async (req,res) => {
     try {
         //Due to limited samples in the database, update gender and age first
@@ -59,11 +42,74 @@ const getDiagnosisBySymptomAgeGender = async (req,res) => {
     }
 }
 
+// these two variables will be used for two submits from the front-end,
+// then combine them and insert into one record of patient table in DB
+let newPatientInfo = {};
+let newPatientSymptoms = {};
 
+const postPatientInfo = async (req,res)=> {
+  const {AgeGroup, Height, Weight, Gender} = req.body;
+  newPatientInfo = {
+    AgeGroup,
+    Height,
+    Weight,
+    Gender
+  };
+
+  try {
+      // await knex('patientInfo').insert(newPatientInfo);
+      res.status(201).send("Patient info saved successfully!");
+  } catch (error) {
+      console.log(error);
+      res.status(400).send("Failed record patient info");
+  }
+}
+
+const postPatientSymptom = async (req,res)=> {
+  const selectedSymptoms = (req.body.selectedSymptoms).join(",");
+  const inputSymptoms = req.body.inputSymptoms;
+  newPatientSymptoms = inputSymptoms + selectedSymptoms;
+  console.log("newPatientSymptoms: ",newPatientSymptoms);
+
+  const newPatientData = {
+    ...newPatientInfo,
+    newPatientSymptoms
+};
+
+  try {
+      await knex('patientInfo').insert(newPatientData);
+      res.status(201).send("Patient basic Info and Symptoms recorded successfully!");
+  } catch (error) {
+      console.log(error);
+      res.status(400).send("Failed record patient's Info or Symptoms");
+  }
+}
+
+const getDiagnosis = async (req,res) => {
+  try {
+    //Due to limited samples in the database, update gender and age first, so that we have corresponding samples
+    //await knex('diagnosis').update('Gender',newPatientInfo.Gender).update('Age',newPatientInfo.AgeGroup);
+    //subquery to get symptomID based on symptomName entered by user
+    const SymptomID_selected = await knex('diagnosis')
+        .select('symptomID')
+        .whereIn('SymptomID', function() {
+        this.select('ID').from('symptoms').where('Name', 'LIKE',`%${newPatientSymptoms}%`);
+        });
+    const SymptomRecord_user = await knex('diagnosis').where('symptomID', SymptomID_selected[0].symptomID);
+                                                        
+    res.json(SymptomRecord_user);
+    console.log("SymptomRecord_user: ", SymptomRecord_user);
+  } catch (err) {
+    res.status(400).json({
+        message: `Error retrieving diagnosis result : ${err}`
+    })
+  }
+}
 
 module.exports = {
     getIssues,
     getSymptoms,
-    getDiagnosisByIdAgeGender,
-    getDiagnosisBySymptomAgeGender,
+    postPatientInfo,
+    postPatientSymptom,
+    getDiagnosis
 };

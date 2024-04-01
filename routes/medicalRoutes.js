@@ -9,13 +9,15 @@ router.route("/issues").get(medicalControllers.getIssues);
 // get all symptoms
 router.route("/symptoms").get(medicalControllers.getSymptoms);
 
-// get diagnosis by symptom id, gender and age
-router.route("/diagnosis/symptoms/:symptomID/genders/:gender/ages/:age")
-    .get(medicalControllers.getDiagnosisByIdAgeGender);
+// record patient fundamental infomation
+router.route("/diagnosis2").post(medicalControllers.postPatientInfo);
 
-// get diagnosis by symptom name, gender and age
-router.route("/diagnosis/:symptomName/genders/:gender/ages/:age")
-    .get(medicalControllers.getDiagnosisBySymptomAgeGender);
+// record patient symptoms infomation
+router.route("/diagnosis3").post(medicalControllers.postPatientSymptom);
+
+// get diagnosis information
+router.route("/diagnosis4").get(medicalControllers.getDiagnosis);
+
 
 // user signup
 router.route("/signup").post(loginsignupControllers.userRegister);
