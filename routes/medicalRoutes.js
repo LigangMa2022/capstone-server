@@ -6,6 +6,9 @@ const loginsignupControllers = require("../controller/loginsignupControllers");
 // get all issues
 router.route("/issues").get(medicalControllers.getIssues);
 
+// get issue by id
+router.route("/issues/:issueID").get(medicalControllers.getIssueByID);
+
 // get all symptoms
 router.route("/symptoms").get(medicalControllers.getSymptoms);
 

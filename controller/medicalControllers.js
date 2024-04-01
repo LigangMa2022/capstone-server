@@ -1,4 +1,6 @@
 const knex = require("knex")(require("../knexfile"));
+const natural = require('natural');//using 'narural' library for similarity analysis
+
 
 const getIssues = async (req, res) => {
     try {
@@ -10,6 +12,16 @@ const getIssues = async (req, res) => {
       });
     }
   };
+const getIssueByID = async (req, res) => {
+  try {
+    const data = await knex('issuedetails').where("ID",req.params.issueID);
+    res.status(200).json(data);
+  } catch (error) {
+    res.status(400).json({
+      message: `Error retrieving issues: ${err}`,
+    });
+  }
+}
 
 const getSymptoms = async (req, res) => {
     try {
@@ -22,30 +34,10 @@ const getSymptoms = async (req, res) => {
     }
   };
 
-const getDiagnosisBySymptomAgeGender = async (req,res) => {
-    try {
-        //Due to limited samples in the database, update gender and age first
-        await knex('diagnosis').update('Gender',req.params.gender).update('Age',req.params.age);
-        //get symptomID based on symptomName entered by user
-        const SymptomID_selected = await knex('diagnosis')
-            .select('symptomID')
-            .whereIn('SymptomID', function() {
-            this.select('ID').from('symptoms').where('Name', 'like',`%${req.params.symptomName}%`);
-            });
-        const SymptomRecord_user = await knex('diagnosis').where('symptomID', SymptomID_selected[0].symptomID);
-                                                            
-        res.json(SymptomRecord_user);
-    } catch (err) {
-        res.status(400).json({
-            message: `Error retrieving diagnosis result : ${err}`
-        })
-    }
-}
-
 // these two variables will be used for two submits from the front-end,
 // then combine them and insert into one record of patient table in DB
 let newPatientInfo = {};
-let newPatientSymptoms = {};
+let newPatientSymptoms = [];
 
 const postPatientInfo = async (req,res)=> {
   const {AgeGroup, Height, Weight, Gender} = req.body;
@@ -66,14 +58,14 @@ const postPatientInfo = async (req,res)=> {
 }
 
 const postPatientSymptom = async (req,res)=> {
-  const selectedSymptoms = (req.body.selectedSymptoms).join(",");
-  const inputSymptoms = req.body.inputSymptoms;
-  newPatientSymptoms = inputSymptoms + selectedSymptoms;
-  console.log("newPatientSymptoms: ",newPatientSymptoms);
+  const selectedSymptoms = req.body.selectedSymptoms;
+  const inputSymptoms = (req.body.inputSymptoms.split(',')).filter(Boolean).map(item => item.trim());
+  newPatientSymptoms = selectedSymptoms.concat(inputSymptoms);
+  const newPatientSymptom = newPatientSymptoms.join(',');
 
   const newPatientData = {
     ...newPatientInfo,
-    newPatientSymptoms
+    newPatientSymptom
 };
 
   try {
@@ -86,28 +78,47 @@ const postPatientSymptom = async (req,res)=> {
 }
 
 const getDiagnosis = async (req,res) => {
-  try {
-    //Due to limited samples in the database, update gender and age first, so that we have corresponding samples
-    //await knex('diagnosis').update('Gender',newPatientInfo.Gender).update('Age',newPatientInfo.AgeGroup);
-    //subquery to get symptomID based on symptomName entered by user
-    const SymptomID_selected = await knex('diagnosis')
-        .select('symptomID')
-        .whereIn('SymptomID', function() {
-        this.select('ID').from('symptoms').where('Name', 'LIKE',`%${newPatientSymptoms}%`);
-        });
-    const SymptomRecord_user = await knex('diagnosis').where('symptomID', SymptomID_selected[0].symptomID);
-                                                        
-    res.json(SymptomRecord_user);
-    console.log("SymptomRecord_user: ", SymptomRecord_user);
-  } catch (err) {
-    res.status(400).json({
-        message: `Error retrieving diagnosis result : ${err}`
-    })
-  }
+
+  await knex('symptoms')
+  .select('ID', 'Name')
+  .then((rows) => {
+
+    // Compare each symptom in the array with all symptom names from the database
+    for (const symptom of newPatientSymptoms) {
+      let bestMatch = { symptom, similarity: Infinity, bestName: '', bestID: '' };
+
+      for (const dbSymptom of rows) {
+        const distance = natural.LevenshteinDistance(symptom, dbSymptom.Name);
+        console.log(`Comparing ${symptom} with ${dbSymptom.Name}: distance=${distance}`);
+        if (distance < bestMatch.similarity) {
+          bestMatch = { symptom, similarity: distance, bestName: dbSymptom.Name, bestID: dbSymptom.ID };
+        }
+      }
+      console.log('Best match:', bestMatch);
+
+      // Use the best match symptom ID to query diagnosis info from another table
+      knex('diagnosis')
+      .select('*')
+      .where('SymptomID', bestMatch.bestID)
+      .then((diagnosisResults) => {
+        console.log("diagnosisResults:", diagnosisResults);
+        res.json(diagnosisResults);
+      })
+      .catch((err) => {
+        console.error('Error querying diagnosis:', err);
+      });
+      console.log("bestMatch.bestID:",bestMatch.bestID);
+    }
+  })
+  .catch((err) => {
+    console.error('Error querying symptoms:', err);
+  });
+
 }
 
 module.exports = {
     getIssues,
+    getIssueByID,
     getSymptoms,
     postPatientInfo,
     postPatientSymptom,
